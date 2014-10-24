@@ -5,7 +5,7 @@ pgmigrate
 Database migration tool for postgres written in go. 
 
 ```
-Usage: migrate command [parameter] [--path=<directory>]
+Usage: pgmigrate command [parameter] [-path <directory>]
 
 --path=<directory>   Path to repository.  Default current working directory.
 --help               Displays this usage message.
