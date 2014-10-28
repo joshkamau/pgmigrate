@@ -1,7 +1,0 @@
-{
-	"dbHost": "localhost",
-	"dbName": "todo",
-	"dbUsername": "postgres",
-	"dbPassword": "pass",
-	"migrationTableName": "changelog"
-}

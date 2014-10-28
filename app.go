@@ -261,23 +261,26 @@ func ReadMigrationsFromFile() migrations {
 
 func main() {
 
-	command := os.Args[1]
+	if len(os.Args) > 1 {
+		command := os.Args[1]
 
-	switch command {
-	case "init":
-		InitMigration()
-	case "new":
-		NewMigration()
-	case "up":
-		Up()
-	case "down":
-		Down()
-	case "status":
-		Status()
-	default:
-		log.Fatalln("Invalid command.")
+		switch command {
+		case "init":
+			InitMigration()
+		case "new":
+			NewMigration()
+		case "up":
+			Up()
+		case "down":
+			Down()
+		case "status":
+			Status()
+		default:
+			log.Fatalln("Invalid command.")
+		}
+	} else {
+		fmt.Println("usage: pgmigrate <command> <params>")
 	}
-
 }
 
 //creates migration directory, config.js and initial migration
