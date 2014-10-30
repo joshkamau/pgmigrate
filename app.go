@@ -197,7 +197,8 @@ func ReadMigration(filename string) *migration {
 	for _, line := range lines {
 		if strings.Contains(line, "-- @DO") {
 			doing = true
-		} else {
+		}
+		if strings.Contains(line, "-- @UNDO") {
 			doing = false
 		}
 		if doing {
@@ -420,6 +421,7 @@ func Down() {
 	for _, m := range migrations {
 		if int64(count) <= n {
 			if m.IsApplied {
+				log.Printf("Undoing %s ...", m.Description)
 				m.Undo()
 				count++
 			}
