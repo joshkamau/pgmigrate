@@ -408,13 +408,13 @@ func Down() {
 
 	CreateChangeLogTable()
 
-	n := int64(1)
+	n := int64(0)
 	if len(os.Args) > 2 {
 		nstr := os.Args[2]
 		var err error
 		n, err = strconv.ParseInt(nstr, 10, 32)
 		if err != nil {
-			n = int64(1)
+			n = int64(0)
 		}
 	}
 	migrations := ReadMigrationsFromFile()
