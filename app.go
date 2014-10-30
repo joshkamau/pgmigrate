@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const DEFAULT_FILE_PERMISSION = 0666
+
 type config struct {
 	DbHost             string `json:"dbHost"`
 	DbName             string `json:"dbName"`
@@ -100,7 +102,7 @@ func (m *migration) WriteToFile() error {
 	tempPathNames := strings.Split(m.Description, " ")
 	templPath := templAbsPath + "/scripts/" + strconv.FormatInt(m.Timestamp, 10) + "_" + strings.Join(tempPathNames, "_") + ".sql"
 
-	err = ioutil.WriteFile(templPath, templBytes, 777)
+	err = ioutil.WriteFile(templPath, templBytes, DEFAULT_FILE_PERMISSION)
 	if err != nil {
 		return err
 	}
@@ -325,14 +327,14 @@ func InitMigration() {
 		log.Fatalln(err)
 		return
 	}
-	err = ioutil.WriteFile(migrationPath+"/pgmigrate.json", cbytes, 777)
+	err = ioutil.WriteFile(migrationPath+"/pgmigrate.json", cbytes, DEFAULT_FILE_PERMISSION)
 	if err != nil {
 		log.Fatalln(err)
 		return
 	}
 
 	//create scripts folder
-	err = os.Mkdir(migrationPath+"/scripts", 777)
+	err = os.Mkdir(migrationPath+"/scripts", DEFAULT_FILE_PERMISSION)
 	if err != nil {
 		log.Fatalln(err)
 	}
