@@ -433,6 +433,7 @@ func Down() {
 }
 
 func Status() {
+	CreateChangeLogTable()
 	migrations := ReadMigrationsFromFile()
 	for _, m := range migrations {
 		var status string
