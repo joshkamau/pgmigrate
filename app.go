@@ -19,7 +19,8 @@ import (
 	"time"
 )
 
-const DEFAULT_FILE_PERMISSION = 0666
+const DEFAULT_FILE_PERMISSION = 0644
+const DEFAULT_DIR_PERMISSION = 0755
 
 type config struct {
 	DbHost             string `json:"dbHost"`
@@ -334,7 +335,7 @@ func InitMigration() {
 	}
 
 	//create scripts folder
-	err = os.Mkdir(migrationPath+"/scripts", DEFAULT_FILE_PERMISSION)
+	err = os.Mkdir(migrationPath+"/scripts", DEFAULT_DIR_PERMISSION)
 	if err != nil {
 		log.Fatalln(err)
 	}
