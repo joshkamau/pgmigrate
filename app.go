@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	_ "github.com/lib/pq"
 	"io"
 	"io/ioutil"
 	"log"
@@ -17,12 +16,15 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
-const DEFAULT_FILE_PERMISSION = 0644
-const DEFAULT_DIR_PERMISSION = 0755
+const defaultFilePermission = 0644
+const defaultDirPermission = 0755
 
-type config struct {
+//Config holds the migration config parameters
+type Config struct {
 	DbHost             string `json:"dbHost"`
 	DbName             string `json:"dbName"`
 	DbUsername         string `json:"dbUsername"`
@@ -30,7 +32,8 @@ type config struct {
 	MigrationTableName string `json:"migrationTableName"`
 }
 
-type migration struct {
+//Migration encapsulates a migration
+type Migration struct {
 	Description string
 	Timestamp   int64
 	DoScript    string
@@ -38,17 +41,18 @@ type migration struct {
 	IsApplied   bool
 }
 
-type migrations []migration
+//Migrations is a slice of migrations
+type Migrations []Migration
 
-func (ms migrations) Less(i, j int) bool {
+func (ms Migrations) Less(i, j int) bool {
 	return ms[i].Timestamp < ms[j].Timestamp
 }
 
-func (ms migrations) Swap(i, j int) {
+func (ms Migrations) Swap(i, j int) {
 	ms[i], ms[j] = ms[j], ms[i]
 }
 
-func (ms migrations) Len() int {
+func (ms Migrations) Len() int {
 	return len(ms)
 }
 
@@ -61,8 +65,8 @@ var migrationTpl = `-- {{.Description}} --
 
 `
 
-//run the do script
-func (m *migration) Do() {
+//Do runs the do script
+func (m *Migration) Do() {
 	c := GetConfig()
 	ExecuteSql(m.DoScript)
 
@@ -70,24 +74,24 @@ func (m *migration) Do() {
 	db := getDb()
 	_, err := db.Exec(insertSql, m.Timestamp, m.Description)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 }
 
-//run the undo script
-func (m *migration) Undo() {
+//Undo runs the undo script
+func (m *Migration) Undo() {
 	c := GetConfig()
 	ExecuteSql(m.UndoScript)
 
 	deleteSql := fmt.Sprintf("DELETE FROM %s WHERE timestamp = $1", c.MigrationTableName)
 	_, err := db.Exec(deleteSql, m.Timestamp)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 }
 
-//write migration to file
-func (m *migration) WriteToFile() error {
+//WriteToFile writes migration to file
+func (m *Migration) WriteToFile() error {
 	tpl, err := template.New("MigrationTemplate").Parse(migrationTpl)
 	if err != nil {
 		return err
@@ -103,7 +107,7 @@ func (m *migration) WriteToFile() error {
 	tempPathNames := strings.Split(m.Description, " ")
 	templPath := templAbsPath + "/scripts/" + strconv.FormatInt(m.Timestamp, 10) + "_" + strings.Join(tempPathNames, "_") + ".sql"
 
-	err = ioutil.WriteFile(templPath, templBytes, DEFAULT_FILE_PERMISSION)
+	err = ioutil.WriteFile(templPath, templBytes, defaultFilePermission)
 	if err != nil {
 		return err
 	}
@@ -113,25 +117,25 @@ func (m *migration) WriteToFile() error {
 
 var db *sql.DB
 
-//read config file or panic in case of error
-func MustReadConfig() *config {
+//MustReadConfig reads config file or exits in case of error
+func MustReadConfig() *Config {
 	configPath, err := filepath.Abs("./pgmigrate.json")
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 	configBytes, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
-	var c config
+	var c Config
 	json.Unmarshal(configBytes, &c)
 	return &c
 }
 
-var conf *config
+var conf *Config
 
-//Get the configuration, reads from file if the configuration was not already loaded
-func GetConfig() *config {
+//GetConfig gets the configuration, reads from file if the configuration was not already loaded
+func GetConfig() *Config {
 	if conf == nil {
 		c := MustReadConfig()
 		conf = c
@@ -146,14 +150,14 @@ func getDb() *sql.DB {
 		connStr := fmt.Sprintf("dbname=%s user=%s password=%s sslmode=disable", c.DbName, c.DbUsername, c.DbPassword)
 		newDb, err := sql.Open("postgres", connStr)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		db = newDb
 	}
 	return db
 }
 
-//Executes a query without parameters
+//ExecuteSql executes a query without parameters
 func ExecuteSql(query string) {
 	db := getDb()
 	_, err := db.Exec(query)
@@ -163,14 +167,14 @@ func ExecuteSql(query string) {
 	}
 }
 
-//Checks if a migration is already applied
-func IsMigrationApplied(m *migration) bool {
+//IsMigrationApplied checks if a migration is already applied
+func IsMigrationApplied(m *Migration) bool {
 	var count int
 	conf := GetConfig()
 	db := getDb()
 	err := db.QueryRow("SELECT COUNT(*) as count FROM "+conf.MigrationTableName+" WHERE timestamp = $1", m.Timestamp).Scan(&count)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	if count > 0 {
@@ -179,18 +183,18 @@ func IsMigrationApplied(m *migration) bool {
 	return false
 }
 
-//Mark migration as either applied or not
-func SetMigrationStatus(m *migration) {
+//SetMigrationStatus marks migration as either applied or not
+func SetMigrationStatus(m *Migration) {
 	if IsMigrationApplied(m) {
 		m.IsApplied = true
 	}
 }
 
-//Reads a migration from file
-func ReadMigration(filename string) *migration {
+//ReadMigration reads a migration from file
+func ReadMigration(filename string) *Migration {
 	migrationBytes, err := ioutil.ReadFile("./scripts/" + filename)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	migrationStr := string(migrationBytes)
 	lines := strings.Split(migrationStr, "\n")
@@ -219,11 +223,10 @@ func ReadMigration(filename string) *migration {
 	if len(matches) > 0 {
 		timestamp, err = strconv.ParseInt(matches[0], 10, 64)
 		if err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 	} else {
-		panic("Invalid migration file name")
-		return nil
+		log.Fatalln("Invalid migration file name")
 	}
 
 	reDescription := regexp.MustCompile("[a-zA-Z]+")
@@ -235,7 +238,7 @@ func ReadMigration(filename string) *migration {
 
 	description := strings.Join(descMatches, " ")
 
-	m := migration{
+	m := Migration{
 		Description: description,
 		Timestamp:   timestamp,
 		DoScript:    doScript,
@@ -247,14 +250,14 @@ func ReadMigration(filename string) *migration {
 	return &m
 }
 
-//Reads all migrations from files
-func ReadMigrationsFromFile() migrations {
+//ReadMigrationsFromFile reads all migrations from files
+func ReadMigrationsFromFile() Migrations {
 	fis, err := ioutil.ReadDir("./scripts/")
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
-	var ms migrations
+	var ms Migrations
 	for _, f := range fis {
 		mig := ReadMigration(f.Name())
 		ms = append(ms, *mig)
@@ -287,12 +290,11 @@ func main() {
 	}
 }
 
-//creates migration directory, config.js and initial migration
+//InitMigration creates migration directory, config.js and initial migration
 func InitMigration() {
 
 	if len(os.Args) < 3 {
-		log.Fatal("Missing parameters. Usage: pgmigrate init <path>")
-		return
+		log.Fatalln("Missing parameters. Usage: pgmigrate init <path>")
 	}
 
 	migrationPath := os.Args[2]
@@ -303,45 +305,39 @@ func InitMigration() {
 	stats, err := os.Stat(migrationPath)
 	if err != nil {
 		log.Fatalln(err)
-		return
 	}
 	//confirm path is a directory
 	if !stats.IsDir() {
 		log.Fatalln("The migration path provided is not a directory")
-		return
 	}
 	//confirm the directory is empty
 	file, err := os.Open(migrationPath)
 	if err != nil {
 		log.Fatalln(err)
-		return
 	}
 	_, err = file.Readdir(1)
 	if err != io.EOF {
 		log.Fatalln("migration directory is not empty ")
-		return
 	}
 	//create pgmigrate.json
-	var c config
+	var c Config
 	cbytes, err := json.MarshalIndent(c, "", "\t")
 	if err != nil {
 		log.Fatalln(err)
-		return
 	}
-	err = ioutil.WriteFile(migrationPath+"/pgmigrate.json", cbytes, DEFAULT_FILE_PERMISSION)
+	err = ioutil.WriteFile(migrationPath+"/pgmigrate.json", cbytes, defaultFilePermission)
 	if err != nil {
 		log.Fatalln(err)
-		return
 	}
 
 	//create scripts folder
-	err = os.Mkdir(migrationPath+"/scripts", DEFAULT_DIR_PERMISSION)
+	err = os.Mkdir(migrationPath+"/scripts", defaultDirPermission)
 	if err != nil {
 		log.Fatalln(err)
 	}
 }
 
-//creates a new migration
+//NewMigration creates a new migration
 func NewMigration() {
 	//confirm description is provided
 	if len(os.Args) < 3 {
@@ -355,7 +351,7 @@ func NewMigration() {
 			description = description + " " + s
 		}
 	}
-	m := migration{Description: description, Timestamp: time.Now().Unix()}
+	m := Migration{Description: description, Timestamp: time.Now().Unix()}
 
 	//write migration to file
 	err := m.WriteToFile()
@@ -364,6 +360,7 @@ func NewMigration() {
 	}
 }
 
+//CreateChangeLogTable creates changelog table
 func CreateChangeLogTable() {
 	c := GetConfig()
 	query := fmt.Sprintf("CREATE TABLE %s (id SERIAL PRIMARY KEY, timestamp NUMERIC, description VARCHAR(500));", c.MigrationTableName)
@@ -371,8 +368,8 @@ func CreateChangeLogTable() {
 	db.Exec(query)
 }
 
+//Up applies the 'up' migration
 func Up() {
-
 	CreateChangeLogTable()
 
 	n := int64(0)
@@ -405,6 +402,7 @@ func Up() {
 
 }
 
+//Down applies the 'down' migration
 func Down() {
 
 	CreateChangeLogTable()
@@ -432,6 +430,7 @@ func Down() {
 	}
 }
 
+//Status shows the status of all migrations
 func Status() {
 	CreateChangeLogTable()
 	migrations := ReadMigrationsFromFile()
