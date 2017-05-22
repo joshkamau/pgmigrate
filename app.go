@@ -68,11 +68,11 @@ var migrationTpl = `-- {{.Description}} --
 //Do runs the do script
 func (m *Migration) Do() {
 	c := GetConfig()
-	ExecuteSql(m.DoScript)
+	ExecuteSQL(m.DoScript)
 
-	insertSql := fmt.Sprintf("INSERT INTO %s (timestamp, description) VALUES ($1, $2)", c.MigrationTableName)
+	insertSQL := fmt.Sprintf("INSERT INTO %s (timestamp, description) VALUES ($1, $2)", c.MigrationTableName)
 	db := getDb()
-	_, err := db.Exec(insertSql, m.Timestamp, m.Description)
+	_, err := db.Exec(insertSQL, m.Timestamp, m.Description)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -81,10 +81,10 @@ func (m *Migration) Do() {
 //Undo runs the undo script
 func (m *Migration) Undo() {
 	c := GetConfig()
-	ExecuteSql(m.UndoScript)
+	ExecuteSQL(m.UndoScript)
 
-	deleteSql := fmt.Sprintf("DELETE FROM %s WHERE timestamp = $1", c.MigrationTableName)
-	_, err := db.Exec(deleteSql, m.Timestamp)
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE timestamp = $1", c.MigrationTableName)
+	_, err := db.Exec(deleteSQL, m.Timestamp)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -157,8 +157,8 @@ func getDb() *sql.DB {
 	return db
 }
 
-//ExecuteSql executes a query without parameters
-func ExecuteSql(query string) {
+//ExecuteSQL executes a query without parameters
+func ExecuteSQL(query string) {
 	db := getDb()
 	_, err := db.Exec(query)
 	if err != nil {
@@ -411,13 +411,14 @@ func Down() {
 	if len(os.Args) > 2 {
 		nstr := os.Args[2]
 		var err error
-		n, err = strconv.ParseInt(nstr, 10, 32)
+		n, err = strconv.ParseInt(nstr, 10, 64)
 		if err != nil {
 			n = int64(0)
 		}
 	}
 	migrations := ReadMigrationsFromFile()
-
+	//reverse the order of migrations when going down
+	sort.Sort(sort.Reverse(migrations))
 	count := 0
 	for _, m := range migrations {
 		if int64(count) <= n {
