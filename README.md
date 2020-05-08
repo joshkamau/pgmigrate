@@ -3,6 +3,7 @@ pgmigrate
 
 
 Database migration tool for postgres written in go. 
+This tool is inspired by mybatis migrations.
 
 ```
 Usage: pgmigrate command [parameter]
