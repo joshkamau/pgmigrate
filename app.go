@@ -293,7 +293,6 @@ func main() {
 //InitMigration creates migration directory, config.js and initial migration
 func InitMigration() {
 
-	log.Println(os.Args)
 	if len(os.Args) < 2 {
 		log.Fatalln("Missing parameters. Usage: pgmigrate init <path>")
 	}
@@ -307,7 +306,7 @@ func InitMigration() {
 	if err != nil {
 		log.Fatalln("Unable to get absolute path: ", err)
 	}
-	fmt.Println("Initializing migrations at ", migrationPath)
+	fmt.Println("Initializing migrations at: ", migrationPath)
 	//confirm path exists
 	stats, err := os.Stat(migrationPath)
 	if err != nil {
