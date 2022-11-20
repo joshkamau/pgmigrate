@@ -14,4 +14,6 @@ Commands:
   up [n]             Run unapplied migrations, ALL by default, or 'n' specified.
   down [n]           Undoes migrations applied to the database. ONE by default or 'n' specified.
   status             Prints the changelog from the database if the changelog table exists `
+  function <description> creates a new function file. 
+  run-functions     Drops and 'create or replace' all the functions. This allows you to manage functions using git.
 ```
