@@ -41,6 +41,38 @@ type Migration struct {
 	IsApplied   bool
 }
 
+//Function encapsulates a function
+type Function struct {
+	Description    string
+	Timestamp      int64
+	FunctionScript string
+}
+
+//WriteToFile writes migration to file
+func (m *Function) WriteToFile() error {
+	tpl, err := template.New("FunctionTemplate").Parse(functionTpl)
+	if err != nil {
+		return err
+	}
+	var templ bytes.Buffer
+	tpl.Execute(&templ, m)
+	templBytes := templ.Bytes()
+	templAbsPath, err := filepath.Abs(".")
+	if err != nil {
+		return err
+	}
+
+	tempPathNames := strings.Split(m.Description, " ")
+	templPath := templAbsPath + "/scripts/functions/" + strconv.FormatInt(m.Timestamp, 10) + "_" + strings.Join(tempPathNames, "_") + ".sql"
+
+	err = ioutil.WriteFile(templPath, templBytes, defaultFilePermission)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 //Migrations is a slice of migrations
 type Migrations []Migration
 
@@ -56,6 +88,22 @@ func (ms Migrations) Len() int {
 	return len(ms)
 }
 
+//Functions
+//Migrations is a slice of migrations
+type Functions []Function
+
+func (ms Functions) Less(i, j int) bool {
+	return ms[i].Timestamp < ms[j].Timestamp
+}
+
+func (ms Functions) Swap(i, j int) {
+	ms[i], ms[j] = ms[j], ms[i]
+}
+
+func (ms Functions) Len() int {
+	return len(ms)
+}
+
 var migrationTpl = `-- {{.Description}} --
 -- @DO sql script --
 
@@ -64,6 +112,24 @@ var migrationTpl = `-- {{.Description}} --
 
 
 `
+
+var functionTpl = `-- {{.Description}} --
+drop function function_name;
+create or replace function function_name returns return_type 
+language plpgsql 
+as $$
+    declare 
+        -- declarations
+    begin 
+
+    end;
+$$;
+`
+
+//Do runs the function script
+func (m *Function) RunFunction() {
+	ExecuteSQL(m.FunctionScript)
+}
 
 //Do runs the do script
 func (m *Migration) Do() {
@@ -250,6 +316,61 @@ func ReadMigration(filename string) *Migration {
 	return &m
 }
 
+//ReadFunction reads a function from file
+func ReadFunction(filename string) *Function {
+	functionBytes, err := ioutil.ReadFile("./scripts/functions/" + filename)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	functionScript := string(functionBytes)
+
+	//get the timestamp part
+	re := regexp.MustCompile("[0-9]+")
+	matches := re.FindAllString(filename, 1)
+
+	var timestamp int64
+	if len(matches) > 0 {
+		timestamp, err = strconv.ParseInt(matches[0], 10, 64)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		log.Fatalln("Invalid function file name")
+	}
+
+	reDescription := regexp.MustCompile("[a-zA-Z]+")
+
+	descMatches := reDescription.FindAllString(filename, 10)
+
+	//remove the last bit i.e sql in file name
+	descMatches = descMatches[:len(descMatches)-1]
+
+	description := strings.Join(descMatches, " ")
+
+	f := Function{
+		Description:    description,
+		Timestamp:      timestamp,
+		FunctionScript: functionScript,
+	}
+
+	return &f
+}
+
+func ReadFunctionsFromFile() Functions {
+	fis, err := ioutil.ReadDir("./scripts/functions/")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	var ms Functions
+	for _, f := range fis {
+		mig := ReadFunction(f.Name())
+		ms = append(ms, *mig)
+	}
+	sort.Sort(ms)
+	return ms
+}
+
 //ReadMigrationsFromFile reads all migrations from files
 func ReadMigrationsFromFile() Migrations {
 	fis, err := ioutil.ReadDir("./scripts/")
@@ -259,8 +380,10 @@ func ReadMigrationsFromFile() Migrations {
 
 	var ms Migrations
 	for _, f := range fis {
-		mig := ReadMigration(f.Name())
-		ms = append(ms, *mig)
+		if !f.IsDir() {
+			mig := ReadMigration(f.Name())
+			ms = append(ms, *mig)
+		}
 	}
 	sort.Sort(ms)
 	return ms
@@ -276,6 +399,10 @@ func main() {
 			InitMigration()
 		case "new":
 			NewMigration()
+		case "function":
+			NewFunction()
+		case "run-functions":
+			RunFunctions()
 		case "up":
 			Up()
 		case "down":
@@ -341,6 +468,12 @@ func InitMigration() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	//make functions folder
+	err = os.Mkdir(migrationPath+"/scripts/functions", defaultDirPermission)
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
 //NewMigration creates a new migration
@@ -358,6 +491,29 @@ func NewMigration() {
 		}
 	}
 	m := Migration{Description: description, Timestamp: time.Now().Unix()}
+
+	//write migration to file
+	err := m.WriteToFile()
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+//NewFunction creates a new function
+func NewFunction() {
+	//confirm description is provided
+	if len(os.Args) < 3 {
+		log.Fatalln("Invalid paramenters. Usage: pgmigrate function migration description text")
+	}
+
+	//create new migration
+	var description string
+	for i, s := range os.Args {
+		if i > 1 {
+			description = description + " " + s
+		}
+	}
+	m := Function{Description: description, Timestamp: time.Now().Unix()}
 
 	//write migration to file
 	err := m.WriteToFile()
@@ -434,6 +590,17 @@ func Down() {
 				count++
 			}
 		}
+	}
+}
+
+//Down applies the 'down' migration
+func RunFunctions() {
+
+	functions := ReadFunctionsFromFile()
+	//reverse the order of migrations when going down
+	sort.Sort(sort.Reverse(functions))
+	for _, f := range functions {
+		f.RunFunction()
 	}
 }
 
